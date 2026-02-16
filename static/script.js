@@ -930,7 +930,10 @@ function switchTab(tab) {
     }
     
     // Close filter dropdown after selection
-    document.getElementById('filterDropdown').classList.remove('show');
+    const filterDropdown = document.getElementById('filterDropdown');
+    if (filterDropdown) {
+        filterDropdown.classList.remove('show');
+    }
 }
 
 function showTemporaryMessage(text) {
@@ -950,16 +953,17 @@ function showTemporaryMessage(text) {
 }
 
 // ========== DROPDOWN FUNCTIONS ==========
-
 function toggleDropdown(dropdownId) {
     const dropdown = document.getElementById(dropdownId);
+    if (!dropdown) return;
     
-    // Close the other dropdown
-    if (dropdownId === 'filterDropdown') {
-        document.getElementById('friendsDropdown').classList.remove('show');
-    } else if (dropdownId === 'friendsDropdown') {
-        document.getElementById('filterDropdown').classList.remove('show');
-    }
+    // Close any other open dropdowns
+    const otherDropdowns = document.querySelectorAll('.dropdown-content.show');
+    otherDropdowns.forEach(d => {
+        if (d.id !== dropdownId) {
+            d.classList.remove('show');
+        }
+    });
     
     // Toggle current dropdown
     dropdown.classList.toggle('show');
@@ -968,10 +972,14 @@ function toggleDropdown(dropdownId) {
     if (dropdownId === 'friendsDropdown' && dropdown.classList.contains('show')) {
         loadFriendsMini();
     }
+    
+    // Load agents when agents dropdown opens
+    if (dropdownId === 'agentsDropdown' && dropdown.classList.contains('show')) {
+        loadAgentsMini();
+    }
 }
 
 // ========== USER MENU FUNCTIONS ==========
-
 function toggleUserMenu() {
     const dropdown = document.getElementById('userDropdown');
     dropdown.classList.toggle('show');
@@ -979,23 +987,32 @@ function toggleUserMenu() {
 
 // Close dropdowns when clicking outside
 document.addEventListener('click', function(event) {
-    const filterDropdown = document.getElementById('filterDropdown');
     const friendsDropdown = document.getElementById('friendsDropdown');
+    const agentsDropdown = document.getElementById('agentsDropdown');
+    const quickActionsDropdown = document.getElementById('quickActionsDropdown');
     const userDropdown = document.getElementById('userDropdown');
-    const filterBtn = document.querySelector('.filter-btn');
-    const friendsBtn = document.querySelector('.friends-btn');
-    const userMenuBtn = document.querySelector('.user-menu-btn');
     
-    // Close filter dropdown if clicking outside
-    if (filterBtn && !filterBtn.contains(event.target) && 
-        filterDropdown && filterDropdown.classList.contains('show')) {
-        filterDropdown.classList.remove('show');
-    }
+    const friendsBtn = document.querySelector('.friends-btn');
+    const agentsBtn = document.querySelector('.agents-btn');
+    const quickActionsBtn = document.querySelector('.quick-actions-btn');
+    const userMenuBtn = document.querySelector('.user-menu-btn');
     
     // Close friends dropdown if clicking outside
     if (friendsBtn && !friendsBtn.contains(event.target) && 
         friendsDropdown && friendsDropdown.classList.contains('show')) {
         friendsDropdown.classList.remove('show');
+    }
+    
+    // Close agents dropdown if clicking outside
+    if (agentsBtn && !agentsBtn.contains(event.target) && 
+        agentsDropdown && agentsDropdown.classList.contains('show')) {
+        agentsDropdown.classList.remove('show');
+    }
+    
+    // Close quick actions dropdown if clicking outside
+    if (quickActionsBtn && !quickActionsBtn.contains(event.target) && 
+        quickActionsDropdown && quickActionsDropdown.classList.contains('show')) {
+        quickActionsDropdown.classList.remove('show');
     }
     
     // Close user dropdown if clicking outside
@@ -1018,8 +1035,10 @@ function loadFriendsMini() {
                 let html = '';
                 data.data.slice(0, 5).forEach(friend => {
                     const friendId = friend._id || friend.id;
+                    // Escape single quotes in name for onclick
+                    const escapedName = friend.name.replace(/'/g, "\\'");
                     html += `
-                        <div class="friend-item-mini" onclick="quickFriendCommand('${friend.name}')">
+                        <div class="friend-item-mini" onclick="quickFriendCommand('${escapedName}')">
                             <div>
                                 <div class="friend-name-mini">${friend.name}</div>
                                 <div class="friend-email-mini">${friend.email}</div>
@@ -1029,7 +1048,7 @@ function loadFriendsMini() {
                     `;
                 });
                 if (data.data.length > 5) {
-                    html += `<div style="text-align: center; padding: 8px; color: #667eea; font-size: 0.8rem; cursor: pointer;" onclick="showFriendsModal()">+${data.data.length - 5} more</div>`;
+                    html += `<div style="text-align: center; padding: 8px; color: #667eea; font-size: 0.8rem; cursor: pointer;" onclick="showFriendsModal(); return false;">+${data.data.length - 5} more</div>`;
                 }
                 friendsList.innerHTML = html;
             } else {
@@ -1043,7 +1062,7 @@ function loadFriendsMini() {
 }
 
 function quickFriendCommand(name) {
-    commandInput.value = `send file to ${name}`;
+    commandInput.value = `send email to ${name}`;
     commandInput.focus();
     document.getElementById('friendsDropdown').classList.remove('show');
 }
@@ -1093,8 +1112,8 @@ function displayFriends(friends) {
                     <div class="friend-email">${friend.email}</div>
                 </div>
                 <div class="friend-actions">
-                    <button class="friend-edit-btn" onclick="editFriend('${friendId}', '${friend.name}', '${friend.email}')">Edit</button>
-                    <button class="friend-delete-btn" onclick="deleteFriend('${friendId}', '${friend.name}')">Delete</button>
+                    <button class="friend-edit-btn" onclick="editFriend('${friendId}', '${friend.name.replace(/'/g, "\\'")}', '${friend.email}')">Edit</button>
+                    <button class="friend-delete-btn" onclick="deleteFriend('${friendId}', '${friend.name.replace(/'/g, "\\'")}')">Delete</button>
                 </div>
             </div>
         `;
@@ -1190,6 +1209,461 @@ function deleteFriend(id, name) {
         console.error('Error deleting friend:', err);
         alert('Error deleting friend');
     });
+}
+
+// ========== AGENTS FUNCTIONS ==========
+
+// ========== AGENTS FUNCTIONS ==========
+
+// Helper function to safely get agent ID from element
+function getSafeAgentId(element) {
+    if (!element) return null;
+    
+    // Try to get from data attribute
+    let agentId = element.getAttribute('data-agent-id');
+    if (agentId) return agentId;
+    
+    // Try to find parent with data-agent-id
+    const parent = element.closest('[data-agent-id]');
+    if (parent) {
+        return parent.getAttribute('data-agent-id');
+    }
+    
+    return null;
+}
+
+// Update your onclick handlers to use this
+document.addEventListener('click', function(e) {
+    const target = e.target;
+    
+    if (target.classList.contains('agent-mini-btn')) {
+        const agentId = getSafeAgentId(target);
+        if (!agentId) {
+            console.error('Could not find agent ID for button:', target);
+            e.preventDefault();
+            return;
+        }
+        
+        const action = target.getAttribute('onclick');
+        console.log('Button clicked:', action, 'with agentId:', agentId);
+    }
+});
+
+function loadAgentsMini() {
+    const agentsList = document.getElementById('agentsMiniList');
+    if (!agentsList) return;
+    
+    console.log('🔍 ===== LOADING AGENTS MINI =====');
+    
+    fetch('/api/agents')
+        .then(res => res.json())
+        .then(data => {
+            console.log('📦 API Response:', JSON.stringify(data, null, 2));
+            
+            if (data.success && data.data && data.data.length > 0) {
+                console.log('📋 Agents count:', data.data.length);
+                
+                let html = '';
+                data.data.slice(0, 3).forEach((agent, index) => {
+                    // Log each agent in detail
+                    console.log(`\n🔍 Agent ${index + 1}:`, agent);
+                    console.log(`   _id:`, agent._id);
+                    console.log(`   _id type:`, typeof agent._id);
+                    console.log(`   id:`, agent.id);
+                    console.log(`   name:`, agent.name);
+                    console.log(`   status:`, agent.status);
+                    
+                    // CRITICAL: Get the ID and ensure it's a string
+                    let agentId = agent._id || agent.id;
+                    
+                    if (!agentId) {
+                        console.error('❌ No ID found for agent:', agent);
+                        return;
+                    }
+                    
+                    // Force to string and trim
+                    agentId = String(agentId).trim();
+                    
+                    // Log the final ID
+                    console.log(`   ✅ Using agentId: "${agentId}" (length: ${agentId.length})`);
+                    
+                    const statusClass = agent.status === 'active' ? 'status-active' : 
+                                      agent.status === 'paused' ? 'status-paused' : 'status-terminated';
+                    
+                    // Create a test button that logs what would be sent
+                    html += `
+                        <div class="agent-mini-item" data-agent-id="${agentId}" data-agent-status="${agent.status}" data-agent-name="${agent.name || 'Unnamed'}">
+                            <div>
+                                <div class="agent-mini-name">${agent.name || 'Unnamed'}</div>
+                                <span class="agent-mini-status ${statusClass}">${agent.status || 'unknown'}</span>
+                            </div>
+                            <div class="agent-mini-actions">
+                                <button class="agent-mini-btn test-pause-btn" title="Test Pause">🔄 Test</button>
+                                <button class="agent-mini-btn agent-pause-btn" title="Pause/Activate">
+                                    ${agent.status === 'active' ? '⏸️' : '▶️'}
+                                </button>
+                                <button class="agent-mini-btn agent-terminate-btn" title="Terminate">⏹️</button>
+                                <button class="agent-mini-btn agent-delete-btn" title="Delete">🗑️</button>
+                            </div>
+                        </div>
+                    `;
+                });
+                
+                agentsList.innerHTML = html;
+                console.log('✅ HTML rendered, attaching event listeners...');
+                
+                // Attach event listeners
+                attachAgentEventListeners();
+            } else {
+                console.log('📭 No agents found');
+                agentsList.innerHTML = '<div style="padding: 10px; color: #6c757d; text-align: center;">No agents yet</div>';
+            }
+        })
+        .catch(err => {
+            console.error('❌ Error loading agents:', err);
+            agentsList.innerHTML = '<div style="padding: 10px; color: #dc3545; text-align: center;">Error loading agents</div>';
+        });
+}
+
+function attachAgentEventListeners() {
+    // Test button - to see what's happening
+    document.querySelectorAll('.test-pause-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const agentItem = this.closest('.agent-mini-item');
+            if (!agentItem) return;
+            
+            const agentId = agentItem.dataset.agentId;
+            const agentName = agentItem.dataset.agentName;
+            const agentStatus = agentItem.dataset.agentStatus;
+            
+            console.log('🔍 TEST BUTTON CLICKED:');
+            console.log('   agentId from dataset:', agentId);
+            console.log('   type:', typeof agentId);
+            console.log('   length:', agentId?.length);
+            console.log('   value:', JSON.stringify(agentId));
+            console.log('   agentName:', agentName);
+            console.log('   agentStatus:', agentStatus);
+            
+            alert(`ID: ${agentId}\nType: ${typeof agentId}\nLength: ${agentId?.length}`);
+        });
+    });
+    
+    // Pause/Activate button
+    document.querySelectorAll('.agent-pause-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const agentItem = this.closest('.agent-mini-item');
+            if (!agentItem) return;
+            
+            const agentId = agentItem.dataset.agentId;
+            const currentStatus = agentItem.dataset.agentStatus;
+            
+            console.log('🔍 PAUSE/ACTIVATE CLICKED:');
+            console.log('   agentId from dataset:', agentId);
+            console.log('   type:', typeof agentId);
+            console.log('   length:', agentId?.length);
+            console.log('   value:', JSON.stringify(agentId));
+            console.log('   currentStatus:', currentStatus);
+            
+            if (!agentId) {
+                console.error('❌ No agent ID found');
+                alert('Error: No agent ID found');
+                return;
+            }
+            
+            // Toggle status
+            const newStatus = currentStatus === 'active' ? 'paused' : 'active';
+            updateAgentStatus(agentId, newStatus);
+        });
+    });
+    
+    // Terminate button
+    document.querySelectorAll('.agent-terminate-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const agentItem = this.closest('.agent-mini-item');
+            if (!agentItem) return;
+            
+            const agentId = agentItem.dataset.agentId;
+            
+            console.log('🔍 TERMINATE CLICKED:');
+            console.log('   agentId from dataset:', agentId);
+            console.log('   type:', typeof agentId);
+            console.log('   value:', JSON.stringify(agentId));
+            
+            if (!agentId) {
+                console.error('❌ No agent ID found');
+                alert('Error: No agent ID found');
+                return;
+            }
+            
+            updateAgentStatus(agentId, 'terminated');
+        });
+    });
+    
+    // Delete button
+    document.querySelectorAll('.agent-delete-btn').forEach(btn => {
+        btn.addEventListener('click', function(e) {
+            e.stopPropagation();
+            const agentItem = this.closest('.agent-mini-item');
+            if (!agentItem) return;
+            
+            const agentId = agentItem.dataset.agentId;
+            const agentName = agentItem.dataset.agentName;
+            
+            console.log('🔍 DELETE CLICKED:');
+            console.log('   agentId from dataset:', agentId);
+            console.log('   type:', typeof agentId);
+            console.log('   value:', JSON.stringify(agentId));
+            console.log('   agentName:', agentName);
+            
+            if (!agentId) {
+                console.error('❌ No agent ID found');
+                alert('Error: No agent ID found');
+                return;
+            }
+            
+            if (confirm(`⚠️ Are you sure you want to permanently delete "${agentName}"?`)) {
+                deleteAgent(agentId);
+            }
+        });
+    });
+}
+
+function updateAgentStatus(agentId, status) {
+    console.log('🔍 UPDATEAGENTSTATUS CALLED:');
+    console.log('   agentId received:', agentId);
+    console.log('   type:', typeof agentId);
+    console.log('   length:', agentId?.length);
+    console.log('   status:', status);
+    
+    // Check if agentId is an object
+    if (agentId && typeof agentId === 'object') {
+        console.error('❌ agentId is an object!', agentId);
+        console.log('   Object keys:', Object.keys(agentId));
+        alert('Error: Invalid agent ID format (object received)');
+        return;
+    }
+    
+    // Ensure it's a string
+    const safeAgentId = String(agentId).trim();
+    
+    // Validate MongoDB ObjectId format (24 hex characters)
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(safeAgentId);
+    
+    console.log('   safeAgentId:', safeAgentId);
+    console.log('   safeAgentId length:', safeAgentId.length);
+    console.log('   isValidObjectId:', isValidObjectId);
+    
+    if (!isValidObjectId) {
+        console.error('❌ Invalid ObjectId format:', safeAgentId);
+        alert(`Error: Invalid agent ID format. Expected 24 hex chars, got "${safeAgentId}" (length: ${safeAgentId.length})`);
+        return;
+    }
+    
+    // Show loading state
+    const agentItem = document.querySelector(`[data-agent-id="${safeAgentId}"]`);
+    if (agentItem) {
+        agentItem.style.opacity = '0.5';
+        agentItem.style.pointerEvents = 'none';
+    }
+    
+    const url = `/api/agents/${safeAgentId}/status`;
+    console.log('📤 Fetch URL:', url);
+    
+    fetch(url, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: status })
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('📥 Response:', data);
+        if (data.success) {
+            showTempMessage(`✅ Agent ${status} successfully`, 'success');
+            loadAgentsMini();
+        } else {
+            alert(data.message || `Failed to ${status} agent`);
+            if (agentItem) {
+                agentItem.style.opacity = '1';
+                agentItem.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(err => {
+        console.error('❌ Fetch error:', err);
+        alert('Error updating agent status');
+        if (agentItem) {
+            agentItem.style.opacity = '1';
+            agentItem.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+function deleteAgent(agentId) {
+    console.log('🔍 DELETEAGENT CALLED:');
+    console.log('   agentId received:', agentId);
+    console.log('   type:', typeof agentId);
+    console.log('   length:', agentId?.length);
+    
+    // Check if agentId is an object
+    if (agentId && typeof agentId === 'object') {
+        console.error('❌ agentId is an object!', agentId);
+        alert('Error: Invalid agent ID format (object received)');
+        return;
+    }
+    
+    // Ensure it's a string
+    const safeAgentId = String(agentId).trim();
+    
+    // Validate MongoDB ObjectId format (24 hex characters)
+    const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(safeAgentId);
+    
+    console.log('   safeAgentId:', safeAgentId);
+    console.log('   safeAgentId length:', safeAgentId.length);
+    console.log('   isValidObjectId:', isValidObjectId);
+    
+    if (!isValidObjectId) {
+        console.error('❌ Invalid ObjectId format:', safeAgentId);
+        alert(`Error: Invalid agent ID format. Expected 24 hex chars, got "${safeAgentId}" (length: ${safeAgentId.length})`);
+        return;
+    }
+    
+    // Show loading state
+    const agentItem = document.querySelector(`[data-agent-id="${safeAgentId}"]`);
+    if (agentItem) {
+        agentItem.style.opacity = '0.5';
+        agentItem.style.pointerEvents = 'none';
+    }
+    
+    const url = `/api/agents/${safeAgentId}`;
+    console.log('📤 Fetch URL:', url);
+    
+    fetch(url, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+    })
+    .then(res => res.json())
+    .then(data => {
+        console.log('📥 Response:', data);
+        if (data.success) {
+            showTempMessage('✅ Agent permanently deleted', 'success');
+            loadAgentsMini();
+        } else {
+            alert(data.message || 'Failed to delete agent');
+            if (agentItem) {
+                agentItem.style.opacity = '1';
+                agentItem.style.pointerEvents = 'auto';
+            }
+        }
+    })
+    .catch(err => {
+        console.error('❌ Fetch error:', err);
+        alert('Error deleting agent');
+        if (agentItem) {
+            agentItem.style.opacity = '1';
+            agentItem.style.pointerEvents = 'auto';
+        }
+    });
+}
+
+function showTempMessage(text, type = 'success') {
+    const msgDiv = document.createElement('div');
+    msgDiv.className = `temp-message ${type}`;
+    msgDiv.textContent = text;
+    document.body.appendChild(msgDiv);
+    
+    setTimeout(() => {
+        msgDiv.style.animation = 'slideOut 0.3s ease';
+        setTimeout(() => msgDiv.remove(), 300);
+    }, 2000);
+}
+
+function showCreateAgentModal() {
+    document.getElementById('agentDescription').value = '';
+    showModal('createAgentModal');
+}
+
+function fillExample(num) {
+    const examples = [
+        "When I get email from venkat, forward it to shashank and sathwik",
+        "Every Monday at 10 AM, create task 'Weekly team sync'",
+        "When file is added to Drive folder 'Reports', summarize it and email me"
+    ];
+    document.getElementById('agentDescription').value = examples[num-1];
+}
+
+function createAgent() {
+    const description = document.getElementById('agentDescription').value;
+    if (!description) {
+        alert('Please describe your agent');
+        return;
+    }
+    
+    fetch('/api/agents/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ description: description })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success) {
+            alert('✅ Agent created successfully!');
+            closeModal('createAgentModal');
+            loadAgentsMini();
+        } else {
+            alert('❌ ' + data.message);
+        }
+    });
+}
+
+// ========== SMART SCHEDULE FUNCTIONS ==========
+
+function showSmartScheduleModal() {
+    document.getElementById('meetingTitle').value = '';
+    document.getElementById('meetingDuration').value = '60';
+    document.getElementById('meetingAttendees').value = '';
+    document.getElementById('suggestedTimes').style.display = 'none';
+    showModal('smartScheduleModal');
+}
+
+function findMeetingTimes() {
+    const title = document.getElementById('meetingTitle').value;
+    const duration = document.getElementById('meetingDuration').value;
+    const attendees = document.getElementById('meetingAttendees').value.split(',').map(e => e.trim()).filter(e => e);
+    
+    fetch('/api/suggest-meeting', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            title: title,
+            duration: parseInt(duration),
+            attendees: attendees
+        })
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.success && data.suggestions) {
+            let html = '';
+            data.suggestions.forEach(suggestion => {
+                html += `
+                    <div class="suggestion-item" onclick="selectMeetingTime('${suggestion.start}')">
+                        <i class="far fa-clock"></i> ${suggestion.display}
+                    </div>
+                `;
+            });
+            document.getElementById('timeSuggestions').innerHTML = html;
+            document.getElementById('suggestedTimes').style.display = 'block';
+        } else {
+            alert('No suggestions found');
+        }
+    });
+}
+
+function selectMeetingTime(time) {
+    alert(`Meeting time selected: ${time}\nYou can now create the event.`);
+    closeModal('smartScheduleModal');
 }
 
 // ========== MODAL FUNCTIONS ==========
@@ -1505,7 +1979,7 @@ function displayFileSearchResults(files, type) {
     files.forEach(file => {
         const icon = getFileIcon(file.mimeType);
         html += `
-            <div class="file-option" onclick="selectFile('${file.name}', '${type}')">
+            <div class="file-option" onclick="selectFile('${file.name.replace(/'/g, "\\'")}', '${type}')">
                 <span style="margin-right: 10px;">${icon}</span>
                 <span>${file.name}</span>
             </div>
@@ -1615,6 +2089,67 @@ function init() {
             }
         });
     }, 500);
+    
+    // Load initial data
+    loadFriendsMini();
+    loadAgentsMini();
 }
 
+// Start the application
 init();
+
+// Add CSS for agent mini items if not present
+const style = document.createElement('style');
+style.textContent = `
+    .agent-mini-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px;
+        border-bottom: 1px solid #f1f3f5;
+        transition: opacity 0.3s;
+    }
+    .agent-mini-item:hover {
+        background: #f8f9fa;
+    }
+    .agent-mini-name {
+        font-weight: 500;
+        color: #495057;
+        font-size: 0.9rem;
+    }
+    .agent-mini-status {
+        font-size: 0.7rem;
+        padding: 2px 6px;
+        border-radius: 10px;
+        display: inline-block;
+        margin-top: 2px;
+    }
+    .agent-mini-actions {
+        display: flex;
+        gap: 5px;
+    }
+    .agent-mini-btn {
+        background: none;
+        border: none;
+        cursor: pointer;
+        padding: 4px;
+        border-radius: 4px;
+        transition: background 0.2s;
+    }
+    .agent-mini-btn:hover {
+        background: #e9ecef;
+    }
+    .status-active {
+        background: #d4edda;
+        color: #155724;
+    }
+    .status-paused {
+        background: #fff3cd;
+        color: #856404;
+    }
+    .status-terminated {
+        background: #f8d7da;
+        color: #721c24;
+    }
+`;
+document.head.appendChild(style);

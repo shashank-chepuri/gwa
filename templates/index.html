@@ -164,35 +164,145 @@
             <div class="header">
                 <div>
                     <h1>🤖 Workspace Agent</h1>
-                    <p>Tasks • Notes • Calendar • Meet • Files • Images • Drafts</p>
+                    <p>Your AI-powered automation platform</p>
                 </div>
                 <div style="display: flex; align-items: center; gap: 15px;">
-                    <!-- Filters Dropdown -->
-                    <div class="dropdown filter-dropdown">
-                        <button class="dropdown-btn filter-btn" onclick="toggleDropdown('filterDropdown')">
-                            <i class="fas fa-filter"></i> <span>Filters</span>
+                    
+                    <!-- Quick Actions Dropdown (Consolidated) -->
+                    <div class="dropdown quick-actions-dropdown">
+                        <button class="dropdown-btn quick-actions-btn" onclick="toggleDropdown('quickActionsDropdown')">
+                            <i class="fas fa-bolt"></i> <span>Quick Actions</span>
                         </button>
-                        <div id="filterDropdown" class="dropdown-content">
-                            <div class="dropdown-section">
-                                <div class="dropdown-section-title">📊 FILTERS</div>
-                                <a href="#" onclick="switchTab('all'); return false;" class="filter-option" data-tab="all">
-                                    <i class="fas fa-globe"></i> All
-                                </a>
-                                <a href="#" onclick="switchTab('tasks'); return false;" class="filter-option" data-tab="tasks">
-                                    <i class="fas fa-tasks"></i> Tasks
-                                </a>
-                                <a href="#" onclick="switchTab('notes'); return false;" class="filter-option" data-tab="notes">
-                                    <i class="fas fa-sticky-note"></i> Notes
-                                </a>
-                                <a href="#" onclick="switchTab('calendar'); return false;" class="filter-option" data-tab="calendar">
-                                    <i class="fas fa-calendar"></i> Calendar
-                                </a>
-                                <a href="#" onclick="switchTab('images'); return false;" class="filter-option" data-tab="images">
-                                    <i class="fas fa-image"></i> Images
-                                </a>
+                        <div id="quickActionsDropdown" class="dropdown-content dropdown-wide">
+                            <div class="dropdown-grid">
+                                <!-- Tasks Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📋 TASKS</div>
+                                    <a href="#" onclick="showTaskModal(); return false;">
+                                        <i class="fas fa-plus-circle"></i> Add Task
+                                    </a>
+                                    <a href="#" onclick="sendCommand('list tasks'); return false;">
+                                        <i class="fas fa-list"></i> List Tasks
+                                    </a>
+                                </div>
+                                
+                                <!-- Notes Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📝 NOTES</div>
+                                    <a href="#" onclick="showNoteModal(); return false;">
+                                        <i class="fas fa-plus-circle"></i> Create Note
+                                    </a>
+                                    <a href="#" onclick="sendCommand('list notes'); return false;">
+                                        <i class="fas fa-list"></i> All Notes
+                                    </a>
+                                    <a href="#" onclick="showNoteSearchModal(); return false;">
+                                        <i class="fas fa-search"></i> Search Notes
+                                    </a>
+                                </div>
+                                
+                                <!-- Calendar Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📅 CALENDAR</div>
+                                    <a href="#" onclick="showEventModal(); return false;">
+                                        <i class="fas fa-plus-circle"></i> Create Event
+                                    </a>
+                                    <a href="#" onclick="sendCommand('list events'); return false;">
+                                        <i class="fas fa-list"></i> Upcoming
+                                    </a>
+                                    <a href="#" onclick="sendCommand('list today'); return false;">
+                                        <i class="fas fa-calendar-day"></i> Today
+                                    </a>
+                                    <a href="#" onclick="showSmartScheduleModal(); return false;">
+                                        <i class="fas fa-clock"></i> Suggest Time
+                                    </a>
+                                </div>
+                                
+                                <!-- Meet Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">🎥 MEET</div>
+                                    <a href="#" onclick="showMeetModal(); return false;">
+                                        <i class="fas fa-plus-circle"></i> Schedule Meet
+                                    </a>
+                                    <a href="#" onclick="showMeetInviteModal(); return false;">
+                                        <i class="fas fa-envelope"></i> Send Invite
+                                    </a>
+                                </div>
+                                
+                                <!-- Files Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📁 FILES</div>
+                                    <a href="#" onclick="sendCommand('list all files'); return false;">
+                                        <i class="fas fa-list"></i> List Files
+                                    </a>
+                                    <a href="#" onclick="showFileSearchModal(); return false;">
+                                        <i class="fas fa-search"></i> Search Files
+                                    </a>
+                                    <a href="#" onclick="sendCommand('show images'); return false;">
+                                        <i class="fas fa-image"></i> Images
+                                    </a>
+                                    <a href="#" onclick="showFolderModal(); return false;">
+                                        <i class="fas fa-folder"></i> View Folder
+                                    </a>
+                                </div>
+                                
+                                <!-- Summaries Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📄 SUMMARIES</div>
+                                    <a href="#" onclick="showSummaryModal(); return false;">
+                                        <i class="fas fa-file-alt"></i> Draft Summary
+                                    </a>
+                                    <a href="#" onclick="showSummaryWithEmailModal(); return false;">
+                                        <i class="fas fa-paper-plane"></i> Summarize & Send
+                                    </a>
+                                </div>
+                                
+                                <!-- Drafts Column -->
+                                <div class="dropdown-column">
+                                    <div class="dropdown-section-title">📧 DRAFTS</div>
+                                    <a href="#" onclick="showDraftModal(); return false;">
+                                        <i class="fas fa-pen"></i> New Draft
+                                    </a>
+                                    <a href="#" onclick="sendCommand('show draft'); return false;">
+                                        <i class="fas fa-eye"></i> Show Draft
+                                    </a>
+                                    <a href="#" onclick="sendCommand('clear draft'); return false;">
+                                        <i class="fas fa-trash"></i> Clear Draft
+                                    </a>
+                                </div>
                             </div>
                         </div>
                     </div>
+                    
+                    <!-- My Agents Dropdown (New!) -->
+                    <div class="dropdown agents-dropdown">
+                        <button class="dropdown-btn agents-btn" onclick="toggleDropdown('agentsDropdown')">
+                            <i class="fas fa-robot"></i> <span>My Agents</span>
+                        </button>
+                        <div id="agentsDropdown" class="dropdown-content" style="min-width: 350px;">
+                            <div class="dropdown-section">
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
+                                    <div class="dropdown-section-title">🤖 YOUR AUTOMATIONS</div>
+                                    <button class="create-agent-btn" onclick="showCreateAgentModal()">
+                                        <i class="fas fa-plus-circle"></i> New Agent
+                                    </button>
+                                </div>
+                                
+                                <!-- Agents List -->
+                                <div id="agentsMiniList" class="agents-mini-list">
+                                    <div style="padding: 10px; color: #6c757d; text-align: center;">Loading your agents...</div>
+                                </div>
+                                
+                                <div style="margin-top: 15px; text-align: center;">
+                                    <a href="/agents" class="view-all-agents">View All Agents →</a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Analytics Button -->
+                    <a href="/analytics" class="analytics-btn" title="View Analytics">
+                        <i class="fas fa-chart-bar"></i> <span>Analytics</span>
+                    </a>
                     
                     <!-- Friends Dropdown -->
                     <div class="dropdown friends-dropdown">
@@ -251,8 +361,8 @@
             <!-- Input Area -->
             <div class="input-area">
                 <div class="input-container">
-                    <input type="text" id="commandInput" placeholder="Type your command... or click 🎤 to speak (Ctrl+M)" autocomplete="off">
-                    <button id="voiceBtn" class="voice-btn" title="Voice input (Ctrl+M)">🎤</button>
+                    <input type="text" id="commandInput" placeholder="Type your command... or click 🎙️ to speak (Ctrl+M)" autocomplete="off">
+                    <button id="voiceBtn" class="voice-btn" title="Voice input (Ctrl+M)">🎙️</button>
                     <button id="sendButton">➤</button>
                 </div>
                 <div id="voiceStatus" class="voice-status"></div>
@@ -260,6 +370,59 @@
         </div>
     </div>
 
+    <!-- Create Agent Modal -->
+    <div class="modal" id="createAgentModal">
+        <div class="modal-content" style="max-width: 600px;">
+            <h2>🤖 Create New Agent</h2>
+            <p style="color: #6c757d; margin-bottom: 20px;">Describe what you want to automate in plain English</p>
+            
+            <div style="background: #f8f9fa; padding: 20px; border-radius: 10px; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 15px;">📝 Examples</h3>
+                <div style="margin-bottom: 10px; padding: 10px; background: white; border-radius: 5px; cursor: pointer;" onclick="fillExample(1)">
+                    "When I get email from venkat, forward it to shashank and sathwik"
+                </div>
+                <div style="margin-bottom: 10px; padding: 10px; background: white; border-radius: 5px; cursor: pointer;" onclick="fillExample(2)">
+                    "Every Monday at 10 AM, create task 'Weekly team sync'"
+                </div>
+                <div style="margin-bottom: 10px; padding: 10px; background: white; border-radius: 5px; cursor: pointer;" onclick="fillExample(3)">
+                    "When file is added to Drive folder 'Reports', summarize it and email me"
+                </div>
+            </div>
+            
+            <textarea id="agentDescription" rows="4" placeholder="Describe your agent..." style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; margin-bottom: 15px;"></textarea>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-secondary" onclick="closeModal('createAgentModal')">Cancel</button>
+                <button class="btn-primary" onclick="createAgent()">Create Agent</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Smart Schedule Modal -->
+    <div class="modal" id="smartScheduleModal">
+        <div class="modal-content" style="max-width: 500px;">
+            <h2>⏰ Suggest Meeting Time</h2>
+            <p style="color: #6c757d; margin-bottom: 20px;">Find the best time for your meeting</p>
+            
+            <input type="text" id="meetingTitle" placeholder="Meeting title" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 2px solid #e9ecef; border-radius: 8px;">
+            
+            <input type="number" id="meetingDuration" placeholder="Duration (minutes)" value="60" style="width: 100%; padding: 10px; margin-bottom: 15px; border: 2px solid #e9ecef; border-radius: 8px;">
+            
+            <input type="text" id="meetingAttendees" placeholder="Attendees (comma-separated emails)" style="width: 100%; padding: 10px; margin-bottom: 20px; border: 2px solid #e9ecef; border-radius: 8px;">
+            
+            <div id="suggestedTimes" style="margin-bottom: 20px; display: none;">
+                <h3>Suggested Times</h3>
+                <div id="timeSuggestions" class="suggestions-list"></div>
+            </div>
+            
+            <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                <button class="btn-primary" onclick="findMeetingTimes()">Find Times</button>
+                <button class="btn-secondary" onclick="closeModal('smartScheduleModal')">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- All other existing modals remain exactly the same -->
     <!-- Friends Modal -->
     <div class="modal" id="friendsModal">
         <div class="modal-content" style="max-width: 600px;">
@@ -486,6 +649,297 @@
         </div>
     </div>
 
-    <script src="/static/script.js"></script>
+        <script src="/static/script.js"></script>
+    <script>
+        // New functions for Agent creation and Smart Scheduling
+        function showCreateAgentModal() {
+            document.getElementById('createAgentModal').classList.add('active');
+        }
+
+        function fillExample(num) {
+            const examples = [
+                {
+                    desc: "when I get email from venkat, forward it to shashank",
+                    name: "Email Forwarder"
+                },
+                {
+                    desc: "every Monday at 10 AM, create task 'Weekly team sync'",
+                    name: "Weekly Sync"
+                },
+                {
+                    desc: "when file is added to Drive folder 'Reports', summarize it",
+                    name: "Report Summarizer"
+                }
+            ];
+            
+            document.getElementById('agentDescription').value = examples[num-1].desc;
+            // Add name field to modal if it exists
+            const nameField = document.getElementById('agentName');
+            if (nameField) {
+                nameField.value = examples[num-1].name;
+            }
+        }
+
+        function createAgent() {
+            const description = document.getElementById('agentDescription').value;
+            const customName = document.getElementById('agentName')?.value.trim();
+            
+            if (!description) {
+                alert('Please describe your agent');
+                return;
+            }
+            
+            // If user provided a custom name, prepend it to the description
+            let finalDescription = description;
+            if (customName) {
+                if (!description.toLowerCase().includes('call it') && 
+                    !description.toLowerCase().includes('name it') && 
+                    !description.toLowerCase().includes('called') &&
+                    !description.match(/^[a-zA-Z0-9\s_-]+:/)) {
+                    finalDescription = `call it "${customName}": ${description}`;
+                }
+            }
+            
+            // Show loading state
+            const createBtn = document.querySelector('#createAgentModal .btn-primary');
+            const originalText = createBtn.textContent;
+            createBtn.disabled = true;
+            createBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Creating...';
+            
+            fetch('/api/agents/create', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ description: finalDescription })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    alert('✅ Agent created successfully!');
+                    closeModal('createAgentModal');
+                    document.getElementById('agentDescription').value = '';
+                    const nameField = document.getElementById('agentName');
+                    if (nameField) {
+                        nameField.value = '';
+                    }
+                    loadAgentsMini();
+                } else {
+                    alert('❌ ' + data.message);
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('❌ Error creating agent');
+            })
+            .finally(() => {
+                createBtn.disabled = false;
+                createBtn.textContent = originalText;
+            });
+        }
+
+        function loadAgentsMini() {
+            const agentsList = document.getElementById('agentsMiniList');
+            if (!agentsList) return;
+            
+            fetch('/api/agents')
+                .then(res => res.json())
+                .then(data => {
+                    if (data.success && data.data && data.data.length > 0) {
+                        let html = '';
+                        data.data.slice(0, 3).forEach(agent => {
+                            const agentId = agent._id || agent.id;
+                            const statusClass = agent.status === 'active' ? 'status-active' : 
+                                              agent.status === 'paused' ? 'status-paused' : 'status-terminated';
+                            html += `
+                                <div class="agent-mini-item" data-agent-id="${agentId}">
+                                    <div>
+                                        <div class="agent-mini-name">${agent.name}</div>
+                                        <span class="agent-mini-status ${statusClass}">${agent.status}</span>
+                                    </div>
+                                    <div class="agent-mini-actions">
+                                        ${agent.status === 'active' ? 
+                                            `<button class="agent-mini-btn" onclick="updateAgentStatus('${agentId}', 'paused')" title="Pause">⏸️</button>` : 
+                                            `<button class="agent-mini-btn" onclick="updateAgentStatus('${agentId}', 'active')" title="Activate">▶️</button>`
+                                        }
+                                        <button class="agent-mini-btn" onclick="updateAgentStatus('${agentId}', 'terminated')" title="Terminate">⏹️</button>
+                                        <button class="agent-mini-btn" onclick="deleteAgent('${agentId}', '${agent.name.replace(/'/g, "\\'")}')" title="Delete">🗑️</button>
+                                    </div>
+                                </div>
+                            `;
+                        });
+                        agentsList.innerHTML = html;
+                    } else {
+                        agentsList.innerHTML = '<div style="padding: 10px; color: #6c757d; text-align: center;">No agents yet</div>';
+                    }
+                });
+        }
+
+        function updateAgentStatus(agentId, status) {
+            if (!agentId) {
+                alert('Invalid agent ID');
+                return;
+            }
+            
+            // Show loading state
+            const agentItem = document.querySelector(`[data-agent-id="${agentId}"]`);
+            if (agentItem) {
+                agentItem.style.opacity = '0.5';
+                agentItem.style.pointerEvents = 'none';
+            }
+            
+            fetch(`/api/agents/${agentId}/status`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status: status })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    // Show temporary success message
+                    const msg = document.createElement('div');
+                    msg.className = 'temp-message success';
+                    msg.textContent = `✅ Agent ${status} successfully`;
+                    document.body.appendChild(msg);
+                    setTimeout(() => msg.remove(), 2000);
+                    
+                    loadAgentsMini();
+                } else {
+                    alert(data.message || `Failed to ${status} agent`);
+                    if (agentItem) {
+                        agentItem.style.opacity = '1';
+                        agentItem.style.pointerEvents = 'auto';
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Error updating agent status');
+                if (agentItem) {
+                    agentItem.style.opacity = '1';
+                    agentItem.style.pointerEvents = 'auto';
+                }
+            });
+        }
+
+        function deleteAgent(agentId, agentName) {
+            if (!agentId) {
+                alert('Invalid agent ID');
+                return;
+            }
+            
+            if (!confirm(`⚠️ Are you sure you want to delete "${agentName}"?`)) {
+                return;
+            }
+            
+            // Show loading state
+            const agentItem = document.querySelector(`[data-agent-id="${agentId}"]`);
+            if (agentItem) {
+                agentItem.style.opacity = '0.5';
+                agentItem.style.pointerEvents = 'none';
+            }
+            
+            fetch(`/api/agents/${agentId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    const msg = document.createElement('div');
+                    msg.className = 'temp-message success';
+                    msg.textContent = '✅ Agent deleted';
+                    document.body.appendChild(msg);
+                    setTimeout(() => msg.remove(), 2000);
+                    
+                    loadAgentsMini();
+                } else {
+                    alert(data.message || 'Failed to delete agent');
+                    if (agentItem) {
+                        agentItem.style.opacity = '1';
+                        agentItem.style.pointerEvents = 'auto';
+                    }
+                }
+            })
+            .catch(err => {
+                console.error('Error:', err);
+                alert('Error deleting agent');
+                if (agentItem) {
+                    agentItem.style.opacity = '1';
+                    agentItem.style.pointerEvents = 'auto';
+                }
+            });
+        }
+
+        function showSmartScheduleModal() {
+            document.getElementById('smartScheduleModal').classList.add('active');
+            document.getElementById('suggestedTimes').style.display = 'none';
+        }
+
+        function findMeetingTimes() {
+            const title = document.getElementById('meetingTitle').value;
+            const duration = document.getElementById('meetingDuration').value;
+            const attendees = document.getElementById('meetingAttendees').value.split(',').map(e => e.trim());
+            
+            fetch('/api/suggest-meeting', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title: title,
+                    duration: parseInt(duration),
+                    attendees: attendees
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success && data.suggestions) {
+                    let html = '';
+                    data.suggestions.forEach(suggestion => {
+                        html += `
+                            <div class="suggestion-item" onclick="selectMeetingTime('${suggestion.start}')">
+                                <i class="far fa-clock"></i> ${suggestion.display}
+                            </div>
+                        `;
+                    });
+                    document.getElementById('timeSuggestions').innerHTML = html;
+                    document.getElementById('suggestedTimes').style.display = 'block';
+                }
+            });
+        }
+
+        function selectMeetingTime(time) {
+            alert(`Meeting time selected: ${time}\nYou can now create the event.`);
+            closeModal('smartScheduleModal');
+        }
+
+        // Add name field to create agent modal in index.html
+        document.addEventListener('DOMContentLoaded', function() {
+            loadAgentsMini();
+            
+            // Add name input to the modal if it doesn't exist
+            const modal = document.getElementById('createAgentModal');
+            if (modal) {
+                const content = modal.querySelector('.modal-content');
+                const title = content.querySelector('h2');
+                
+                // Check if name field already exists
+                if (!document.getElementById('agentName')) {
+                    const nameDiv = document.createElement('div');
+                    nameDiv.style.marginBottom = '20px';
+                    nameDiv.innerHTML = `
+                        <label for="agentName" style="display: block; margin-bottom: 8px; color: #495057; font-weight: 500;">
+                            Agent Name (optional)
+                        </label>
+                        <input type="text" id="agentName" placeholder="e.g., Email Forwarder, Task Reminder" 
+                               style="width: 100%; padding: 12px; border: 2px solid #e9ecef; border-radius: 8px; font-size: 0.95rem;">
+                        <p style="font-size: 0.8rem; color: #6c757d; margin-top: 5px;">
+                            If not specified, a name will be generated automatically
+                        </p>
+                    `;
+                    
+                    // Insert after the title
+                    title.insertAdjacentElement('afterend', nameDiv);
+                }
+            }
+        });
+    </script>
 </body>
 </html>

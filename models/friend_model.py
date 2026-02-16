@@ -47,6 +47,14 @@ class FriendModel:
             if existing:
                 return {'success': False, 'message': 'Friend with this name already exists'}
             
+            # Check if email already exists for this user
+            existing_email = self.collection.find_one({
+                'user_id': user_id,
+                'email': email
+            })
+            if existing_email:
+                return {'success': False, 'message': 'Friend with this email already exists'}
+            
             friend = {
                 'user_id': user_id,
                 'name': name.strip(),
@@ -57,6 +65,7 @@ class FriendModel:
             
             result = self.collection.insert_one(friend)
             friend['_id'] = result.inserted_id
+            print(f"✅ Friend created: {name} ({email}) for user {user_id}")
             return {'success': True, 'data': self.to_json(friend)}
         except Exception as e:
             print(f"⚠️ Error creating friend: {e}")
@@ -80,6 +89,7 @@ class FriendModel:
             
             if result.modified_count > 0:
                 updated = self.collection.find_one({'_id': obj_id})
+                print(f"✅ Friend updated: {updated.get('name')}")
                 return {'success': True, 'data': self.to_json(updated)}
             return {'success': False, 'message': 'Friend not found or no changes made'}
         except Exception as e:
@@ -90,8 +100,13 @@ class FriendModel:
         """Delete a friend."""
         try:
             obj_id = ObjectId(friend_id)
-            result = self.collection.delete_one({'_id': obj_id, 'user_id': user_id})
-            return {'success': result.deleted_count > 0, 'deleted_count': result.deleted_count}
+            # Get friend info before deleting
+            friend = self.collection.find_one({'_id': obj_id, 'user_id': user_id})
+            if friend:
+                result = self.collection.delete_one({'_id': obj_id, 'user_id': user_id})
+                print(f"✅ Friend deleted: {friend.get('name')}")
+                return {'success': True, 'deleted_count': result.deleted_count}
+            return {'success': False, 'message': 'Friend not found'}
         except Exception as e:
             print(f"⚠️ Error deleting friend: {e}")
             return {'success': False, 'message': str(e)}
@@ -129,7 +144,10 @@ class FriendModel:
         """Convert a friend's name to email address."""
         try:
             friend = self.find_by_name(user_id, name)
-            return friend['email'] if friend else None
+            if friend:
+                print(f"📇 Resolved '{name}' to email: {friend['email']}")
+                return friend['email']
+            return None
         except Exception as e:
             print(f"⚠️ Error resolving name: {e}")
             return None
