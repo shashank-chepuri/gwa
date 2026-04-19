@@ -15,7 +15,9 @@ import requests
 class AgentOrchestrator:
     """Manages custom agents and their execution"""
     
-    def __init__(self, db, google_services):
+    def __init__(self, db, google_services, task_handler=None, note_handler=None, 
+                 calendar_handler=None, meet_handler=None, file_handler=None, 
+                 draft_handler=None, cohere_client=None):
         self.db = db
         self.agents_collection = db.agents
         self.google_services = google_services
@@ -25,6 +27,15 @@ class AgentOrchestrator:
         self.running = True
         self.thread = None
         self.email_monitor_thread = None
+        
+        # Handlers for various operations
+        self.task_handler = task_handler
+        self.note_handler = note_handler
+        self.calendar_handler = calendar_handler
+        self.meet_handler = meet_handler
+        self.file_handler = file_handler
+        self.draft_handler = draft_handler
+        self.cohere_client = cohere_client
         
         # Import friend model
         from models.friend_model import FriendModel
@@ -42,17 +53,35 @@ class AgentOrchestrator:
         
         self.thread = threading.Thread(target=run_scheduler, daemon=True)
         self.thread.start()
-        print("✅ Agent orchestrator started")
     
     def start_email_monitoring(self):
         """Start background thread to check for new emails"""
         def monitor_emails():
-            print("📧 Email monitoring started")
+            check_interval = 0
             while self.running:
                 try:
+                    # Check email triggers every 2 minutes
+                    if check_interval >= 4:
+                        # Get active users to monitor
+                        active_agents = list(self.agents_collection.find({
+                            'status': 'active',
+                            'trigger_type': 'email'
+                        }))
+                        
+                        # Get unique user IDs
+                        user_ids = set(agent.get('user_id') for agent in active_agents)
+                        
+                        for user_id in user_ids:
+                            try:
+                                self.check_email_triggers(user_id)
+                            except Exception as e:
+                                pass
+                        
+                        check_interval = 0
+                    
+                    check_interval += 1
                     time.sleep(30)
                 except Exception as e:
-                    print(f"❌ Email monitoring error: {e}")
                     time.sleep(60)
         
         self.email_monitor_thread = threading.Thread(target=monitor_emails, daemon=True)
@@ -128,11 +157,9 @@ class AgentOrchestrator:
                 email = self.friend_model.resolve_name_to_email(user_id, recipient)
                 if email:
                     resolved.append(email)
-                    print(f"         ✅ Resolved friend '{recipient}' to '{email}'")
                 else:
                     # Keep original for error handling
                     resolved.append(recipient)
-                    print(f"         ⚠️ Could not resolve '{recipient}' - not found in friends")
         
         return resolved
     
@@ -319,6 +346,43 @@ class AgentOrchestrator:
             })
             print(f"   📋 Detected task creation: {task_match.group(1)}")
         
+        # Create task without quotes
+        task_match_simple = re.search(r'create\s+(?:a\s+)?task\s+(?:called|named)?\s+(.+?)(?:\s+(?:due|with|and|for)|$)', description, re.IGNORECASE)
+        if task_match_simple and not task_match:
+            actions.append({
+                'type': 'create_task',
+                'title': task_match_simple.group(1).strip()
+            })
+            print(f"   📋 Detected task creation: {task_match_simple.group(1).strip()}")
+        
+        # Create note action
+        note_match = re.search(r'create\s+note\s+[\'"]([^\'"]+)[\'"]', description)
+        if note_match:
+            actions.append({
+                'type': 'create_note',
+                'title': 'Note from Agent',
+                'content': note_match.group(1)
+            })
+            print(f"   📝 Detected note creation")
+        
+        # Create event/meeting action
+        event_match = re.search(r'create\s+(?:event|meeting)\s+[\'"]([^\'"]+)[\'"]', description)
+        if event_match:
+            actions.append({
+                'type': 'create_event',
+                'title': event_match.group(1)
+            })
+            print(f"   📅 Detected event creation: {event_match.group(1)}")
+        
+        # Schedule meeting action
+        meeting_match = re.search(r'schedule\s+(?:a\s+)?meet(?:ing)?\s+(?:called|named)?\s+[\'"]?([^\'"]+)[\'"]?', description, re.IGNORECASE)
+        if meeting_match:
+            actions.append({
+                'type': 'schedule_meet',
+                'title': meeting_match.group(1)
+            })
+            print(f"   🎥 Detected meeting scheduling: {meeting_match.group(1)}")
+        
         # Summarize action
         if 'summarize' in desc_lower and ('email' in desc_lower or 'it' in desc_lower):
             actions.append({
@@ -327,11 +391,25 @@ class AgentOrchestrator:
             print(f"   📄 Detected summarize action")
         
         # List tasks action
-        if 'list my pending tasks' in desc_lower:
+        if 'list my pending tasks' in desc_lower or 'list tasks' in desc_lower:
             actions.append({
                 'type': 'list_tasks'
             })
             print(f"   📋 Detected list tasks action")
+        
+        # List notes action
+        if 'list my notes' in desc_lower or 'list notes' in desc_lower:
+            actions.append({
+                'type': 'list_notes'
+            })
+            print(f"   📝 Detected list notes action")
+        
+        # List events action
+        if 'list my events' in desc_lower or 'list events' in desc_lower:
+            actions.append({
+                'type': 'list_events'
+            })
+            print(f"   📅 Detected list events action")
         
         return actions
     
@@ -361,29 +439,21 @@ class AgentOrchestrator:
             print(f"❌ Agent execution failed: {e}")
     
     def check_email_triggers(self, user_id, credentials_dict=None):
-        """Check for new emails that match agent triggers - DEBUG VERSION"""
-        print("\n" + "=" * 80)
-        print(f"🔍 EMAIL CHECK STARTED for {user_id}")
-        print("=" * 80)
+        """Check for new emails that match agent triggers"""
         
         if not self.gmail_service:
-            print("❌ Gmail service not available")
             return
         
         try:
             # Test Gmail connection
             try:
                 profile = self.gmail_service.users().getProfile(userId='me').execute()
-                print(f"✅ Gmail API connected for {profile.get('emailAddress', 'unknown')}")
             except Exception as e:
                 error_str = str(e)
                 if 'insufficient authentication scopes' in error_str or '403' in error_str:
-                    print("❌ Scope issue detected. Attempting token refresh...")
-                    
                     if credentials_dict:
                         new_creds = self.refresh_token_with_scopes(credentials_dict)
                         if new_creds:
-                            print("✅ Token refreshed, recreating Gmail service...")
                             from googleapiclient.discovery import build
                             from google.oauth2.credentials import Credentials
                             
@@ -393,18 +463,13 @@ class AgentOrchestrator:
                             
                             try:
                                 profile = self.gmail_service.users().getProfile(userId='me').execute()
-                                print(f"✅ Gmail API reconnected")
                             except Exception as retry_error:
-                                print(f"❌ Still failing: {retry_error}")
                                 return
                         else:
-                            print("❌ Manual refresh failed")
                             return
                     else:
-                        print("❌ No credentials provided")
                         return
                 else:
-                    print(f"❌ Gmail API connection failed: {e}")
                     return
             
             # Get all active email-triggered agents
@@ -414,21 +479,10 @@ class AgentOrchestrator:
                 'trigger_type': 'email'
             }))
             
-            print(f"📊 Found {len(agents)} active email-triggered agents")
-            
             if not agents:
-                print("📭 No email agents found. Create one first!")
                 return
             
-            # List all agents for debugging
-            for i, agent in enumerate(agents):
-                trigger_config = agent.get('trigger_config', {})
-                expected_sender = trigger_config.get('value', 'NOT SET')
-                actions = agent.get('actions', [])
-                print(f"   Agent {i+1}: '{agent.get('name')}' - Expects: '{expected_sender}' - Actions: {len(actions)}")
-            
             # Get unread emails
-            print("📥 Fetching unread emails...")
             results = self.gmail_service.users().messages().list(
                 userId='me',
                 q='is:unread',
@@ -436,16 +490,12 @@ class AgentOrchestrator:
             ).execute()
             
             messages = results.get('messages', [])
-            print(f"📧 Found {len(messages)} unread messages")
             
             if not messages:
-                print("📭 No unread messages to process")
                 return
             
             # Process each email
-            for idx, msg in enumerate(messages):
-                print(f"\n--- Processing email {idx+1}/{len(messages)} ---")
-                
+            for msg in messages:
                 try:
                     message = self.gmail_service.users().messages().get(
                         userId='me',
@@ -465,29 +515,25 @@ class AgentOrchestrator:
                             email_match = re.search(r'<(.+?)>', sender)
                             if email_match:
                                 sender = email_match.group(1)
-                            print(f"   📨 From: {sender}")
                         elif header['name'] == 'Subject':
                             subject = header['value']
-                            print(f"   📧 Subject: {subject[:50]}...")
                     
                     # Check against each agent
-                    print(f"   🔍 Checking against {len(agents)} agents...")
                     matched = False
                     
                     for agent in agents:
                         trigger_config = agent.get('trigger_config', {})
                         expected_sender = trigger_config.get('value', '').lower()
-                        agent_name = agent.get('name', 'Unnamed')
                         
-                        print(f"      Agent '{agent_name}' expects: '{expected_sender}'")
-                        print(f"      Comparing with sender: '{sender.lower()}'")
+                        # Resolve friend name to email if needed
+                        resolved_sender = expected_sender
+                        if expected_sender and '@' not in expected_sender:
+                            resolved_email = self.friend_model.resolve_name_to_email(user_id, expected_sender)
+                            if resolved_email:
+                                resolved_sender = resolved_email.lower()
                         
-                        if expected_sender and expected_sender in sender.lower():
-                            print(f"      ✅ MATCH FOUND for agent: {agent_name}")
+                        if resolved_sender and resolved_sender in sender.lower():
                             matched = True
-                            
-                            # Execute actions with resolved recipients
-                            print(f"      🎯 Executing {len(agent.get('actions', []))} actions...")
                             
                             # Resolve any friend names in the agent's actions before execution
                             resolved_agent = self._resolve_agent_recipients(agent, user_id)
@@ -506,26 +552,16 @@ class AgentOrchestrator:
                                     id=msg['id'],
                                     body={'removeLabelIds': ['UNREAD']}
                                 ).execute()
-                                print("      ✅ Marked as read")
                             except Exception as e:
-                                print(f"      ⚠️ Could not mark as read: {e}")
+                                pass
                             
                             break  # Stop checking other agents for this email
                     
-                    if not matched:
-                        print("      ❌ No matching agent found for this email")
-                    
                 except Exception as e:
-                    print(f"❌ Error processing message: {e}")
-                    import traceback
-                    traceback.print_exc()
-            
-            print("=" * 80 + "\n")
+                    pass
                     
         except Exception as e:
-            print(f"❌ Error in check_email_triggers: {e}")
-            import traceback
-            traceback.print_exc()
+            pass
     
     def _resolve_agent_recipients(self, agent, user_id):
         """Resolve friend names to emails in all actions of an agent"""
@@ -536,7 +572,6 @@ class AgentOrchestrator:
                 original_recipients = action.get('recipients', [])
                 resolved_recipients = self.resolve_recipients(user_id, original_recipients)
                 action['recipients'] = resolved_recipients
-                print(f"      🔄 Resolved recipients: {original_recipients} -> {resolved_recipients}")
             
             # Add other action types that might have recipients here
             elif action.get('type') == 'summarize_and_email' and 'recipients' in action:
@@ -560,12 +595,22 @@ class AgentOrchestrator:
                     self._forward_email(action, user_id, email_context)
                 elif action_type == 'create_task':
                     self._create_task(action, user_id)
+                elif action_type == 'create_note':
+                    self._create_note(action, user_id)
+                elif action_type == 'create_event':
+                    self._create_event(action, user_id)
+                elif action_type == 'schedule_meet':
+                    self._schedule_meet(action, user_id)
                 elif action_type == 'send_reply':
                     self._send_reply(action, user_id, email_context)
                 elif action_type == 'summarize_and_email':
                     self._summarize_and_email(action, user_id, email_context)
                 elif action_type == 'list_tasks':
                     self._list_tasks(action, user_id)
+                elif action_type == 'list_notes':
+                    self._list_notes(action, user_id)
+                elif action_type == 'list_events':
+                    self._list_events(action, user_id)
                 elif action_type == 'notify':
                     print(f"         Notification: {action.get('message')}")
                 else:
@@ -640,9 +685,34 @@ class AgentOrchestrator:
             traceback.print_exc()
     
     def _create_task(self, action, user_id):
-        """Create a task using Tasks API"""
+        """Create a task using TaskHandler"""
         title = action.get('title', 'Untitled Task')
         print(f"         📋 Creating task: {title}")
+        
+        if not self.task_handler:
+            print("         ❌ Task handler not available")
+            # Fallback to Google Tasks API
+            return self._create_task_api(action, user_id)
+        
+        try:
+            result = self.task_handler.add_task({
+                'text': title,
+                'due': None
+            })
+            
+            if result.get('success'):
+                print(f"         ✅ Task created: {title}")
+            else:
+                print(f"         ⚠️ Task creation returned: {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to create task: {e}")
+            # Fallback to API
+            self._create_task_api(action, user_id)
+    
+    def _create_task_api(self, action, user_id):
+        """Create a task using Tasks API (fallback)"""
+        title = action.get('title', 'Untitled Task')
         
         if not self.tasks_service:
             print("         ❌ Tasks service not available")
@@ -669,7 +739,7 @@ class AgentOrchestrator:
                 body=task
             ).execute()
             
-            print(f"         ✅ Task created: {result.get('title')} (ID: {result.get('id')})")
+            print(f"         ✅ Task created via API: {result.get('title')} (ID: {result.get('id')})")
             
         except Exception as e:
             print(f"         ❌ Failed to create task: {e}")
@@ -708,35 +778,233 @@ class AgentOrchestrator:
             print(f"         ❌ Failed to send reply: {e}")
     
     def _summarize_and_email(self, action, user_id, email_context=None):
-        """Summarize a document and email it"""
-        print("         📄 Summarize feature coming soon...")
+        """Summarize a document/email and email it"""
+        print("         📄 Summarizing content")
+        
+        if not self.cohere_client:
+            print("         ⚠️ Cohere client not available - skipping summarization")
+            return
+        
+        if not email_context:
+            print("         ⚠️ No email context for summarization")
+            return
+        
+        try:
+            # Get full email content for summarization
+            if self.gmail_service and email_context.get('message_id'):
+                try:
+                    message = self.gmail_service.users().messages().get(
+                        userId='me',
+                        id=email_context['message_id'],
+                        format='full'
+                    ).execute()
+                    
+                    # Extract body
+                    payload = message.get('payload', {})
+                    parts = payload.get('parts', [])
+                    body_text = ''
+                    
+                    if parts:
+                        for part in parts:
+                            if part.get('mimeType') == 'text/plain':
+                                data = part.get('body', {}).get('data', '')
+                                if data:
+                                    import base64
+                                    body_text = base64.urlsafe_b64decode(data).decode('utf-8')
+                                    break
+                    else:
+                        data = payload.get('body', {}).get('data', '')
+                        if data:
+                            import base64
+                            body_text = base64.urlsafe_b64decode(data).decode('utf-8')
+                    
+                    if not body_text:
+                        print("         ⚠️ Could not extract email body")
+                        return
+                    
+                    # Summarize using Cohere
+                    print(f"         🤖 Summarizing {len(body_text)} characters...")
+                    response = self.cohere_client.summarize(
+                        text=body_text,
+                        length='short'
+                    )
+                    
+                    summary = response.summary if hasattr(response, 'summary') else str(response)
+                    
+                    # Send summary email
+                    recipients = action.get('recipients', [email_context.get('sender')])
+                    
+                    for recipient in recipients:
+                        try:
+                            message = MIMEText(f"Summary of email from {email_context.get('sender')}:\n\n{summary}")
+                            message['to'] = recipient
+                            message['subject'] = f"Summary: {email_context.get('subject', 'No Subject')}"
+                            message['from'] = 'me'
+                            
+                            raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
+                            
+                            send_result = self.gmail_service.users().messages().send(
+                                userId='me',
+                                body={'raw': raw}
+                            ).execute()
+                            
+                            print(f"         ✅ Summary sent to {recipient}")
+                            
+                        except Exception as e:
+                            print(f"         ❌ Failed to send summary: {e}")
+                    
+                except Exception as e:
+                    print(f"         ❌ Failed to summarize email: {e}")
+            
+        except Exception as e:
+            print(f"         ❌ Summarization failed: {e}")
     
     def _list_tasks(self, action, user_id):
         """List pending tasks"""
         print("         📋 Listing pending tasks")
         
-        if not self.tasks_service:
-            print("         ❌ Tasks service not available")
+        if not self.task_handler:
+            print("         ❌ Task handler not available")
             return
         
         try:
-            task_lists = self.tasks_service.tasklists().list().execute().get('items', [])
-            if not task_lists:
-                print("         No task lists found")
-                return
+            result = self.task_handler.list_tasks()
             
-            task_list_id = task_lists[0]['id']
-            print(f"         Using task list: {task_lists[0].get('title')}")
-            
-            tasks = self.tasks_service.tasks().list(
-                tasklist=task_list_id,
-                showCompleted=False
-            ).execute().get('items', [])
-            
-            print(f"         Found {len(tasks)} pending tasks:")
-            for task in tasks:
-                due = task.get('due', 'No due date')
-                print(f"           • {task.get('title')} (Due: {due})")
+            if result.get('success'):
+                pending = result.get('data', {}).get('pending', [])
+                print(f"         ✅ Found {len(pending)} pending tasks:")
+                for task in pending:
+                    due = task.get('due', 'No due date')
+                    print(f"           • {task.get('title')} (Due: {due})")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
                 
         except Exception as e:
             print(f"         ❌ Failed to list tasks: {e}")
+    
+    def _create_note(self, action, user_id):
+        """Create a note using NoteHandler"""
+        title = action.get('title', 'Untitled Note')
+        content = action.get('content', '')
+        
+        print(f"         📝 Creating note: {title}")
+        
+        if not self.note_handler:
+            print("         ❌ Note handler not available")
+            return
+        
+        try:
+            result = self.note_handler.create_note({
+                'title': title,
+                'content': content
+            })
+            
+            if result.get('success'):
+                print(f"         ✅ Note created: {title}")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to create note: {e}")
+    
+    def _list_notes(self, action, user_id):
+        """List all notes"""
+        print("         📝 Listing notes")
+        
+        if not self.note_handler:
+            print("         ❌ Note handler not available")
+            return
+        
+        try:
+            result = self.note_handler.list_notes()
+            
+            if result.get('success'):
+                notes = result.get('data', [])
+                print(f"         ✅ Found {len(notes)} notes:")
+                for note in notes[:5]:  # Show first 5
+                    print(f"           • {note.get('title')}")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to list notes: {e}")
+    
+    def _create_event(self, action, user_id):
+        """Create a calendar event using CalendarHandler"""
+        title = action.get('title', 'Untitled Event')
+        
+        print(f"         📅 Creating event: {title}")
+        
+        if not self.calendar_handler:
+            print("         ❌ Calendar handler not available")
+            return
+        
+        try:
+            # Parse the title for date/time info
+            result = self.calendar_handler.create_event({
+                'title': title,
+                'date': None,  # Could parse from title
+                'time': None
+            })
+            
+            if result.get('success'):
+                print(f"         ✅ Event created: {title}")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to create event: {e}")
+    
+    def _list_events(self, action, user_id):
+        """List upcoming events"""
+        print("         📅 Listing events")
+        
+        if not self.calendar_handler:
+            print("         ❌ Calendar handler not available")
+            return
+        
+        try:
+            result = self.calendar_handler.list_events()
+            
+            if result.get('success'):
+                events = result.get('data', [])
+                print(f"         ✅ Found {len(events)} upcoming events:")
+                for event in events[:5]:  # Show first 5
+                    summary = event.get('summary', 'Untitled')
+                    start = event.get('start', {}).get('dateTime', event.get('start', {}).get('date', 'N/A'))
+                    print(f"           • {summary} ({start})")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to list events: {e}")
+    
+    def _schedule_meet(self, action, user_id):
+        """Schedule a Google Meet using MeetHandler"""
+        title = action.get('title', 'Untitled Meeting')
+        
+        print(f"         🎥 Scheduling meeting: {title}")
+        
+        if not self.meet_handler:
+            print("         ❌ Meet handler not available")
+            return
+        
+        try:
+            result = self.meet_handler.schedule_meet({
+                'title': title,
+                'date': None,  # Could parse from title
+                'time': None,
+                'attendees': []
+            })
+            
+            if result.get('success'):
+                print(f"         ✅ Meeting scheduled: {title}")
+                if result.get('data', {}).get('conferenceData'):
+                    meet_url = result.get('data', {}).get('conferenceData', {}).get('entryPoints', [{}])[0].get('uri', '')
+                    if meet_url:
+                        print(f"         🔗 Meet link: {meet_url}")
+            else:
+                print(f"         ⚠️ {result.get('message')}")
+                
+        except Exception as e:
+            print(f"         ❌ Failed to schedule meeting: {e}")

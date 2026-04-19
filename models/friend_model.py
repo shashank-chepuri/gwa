@@ -145,9 +145,7 @@ class FriendModel:
         try:
             friend = self.find_by_name(user_id, name)
             if friend:
-                print(f"📇 Resolved '{name}' to email: {friend['email']}")
                 return friend['email']
             return None
         except Exception as e:
-            print(f"⚠️ Error resolving name: {e}")
             return None

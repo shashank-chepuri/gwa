@@ -359,17 +359,14 @@ function sendCommand(command) {
         removeLoadingMessage();
         handleResponse(data, command);
         
-        // Speak the response if it's a success message
-        if (data.success && data.message) {
-            // Don't speak help text (it's too long)
-            if (data.action !== 'help') {
-                speakText(data.message);
-            }
+        if (data.success && data.message && data.action !== 'help') {
+            speakText(data.message);
         }
     })
     .catch(err => {
         removeLoadingMessage();
-        addMessage('Error: Could not connect to server', 'bot');
+        console.error('Command error:', err);
+        addMessage('❌ Error: Could not connect to server', 'bot');
     });
 }
 
@@ -1669,11 +1666,29 @@ function selectMeetingTime(time) {
 // ========== MODAL FUNCTIONS ==========
 
 function showModal(modalId) {
-    document.getElementById(modalId).classList.add('active');
+    try {
+        const modal = document.getElementById(modalId);
+        if (!modal) {
+            console.error(`Modal '${modalId}' not found`);
+            return;
+        }
+        modal.classList.add('active');
+    } catch (error) {
+        console.error(`Error opening modal '${modalId}':`, error);
+    }
 }
 
 function closeModal(modalId) {
-    document.getElementById(modalId).classList.remove('active');
+    try {
+        const modal = document.getElementById(modalId);
+        if (!modal) {
+            console.error(`Modal '${modalId}' not found`);
+            return;
+        }
+        modal.classList.remove('active');
+    } catch (error) {
+        console.error(`Error closing modal '${modalId}':`, error);
+    }
 }
 
 // ========== TASK FUNCTIONS ==========
@@ -1755,13 +1770,25 @@ function showEventModal() {
 }
 
 function createEvent() {
-    const title = document.getElementById('eventTitle').value;
-    const date = document.getElementById('eventDate').value;
-    const time = document.getElementById('eventTime').value;
+    const title = document.getElementById('eventTitle').value.trim();
+    const date = document.getElementById('eventDate').value.trim();
+    const time = document.getElementById('eventTime').value.trim();
     
+    // Validate inputs
+    if (!title) {
+        alert('Please enter an event title');
+        return;
+    }
+    if (!date) {
+        alert('Please enter a date');
+        return;
+    }
+    
+    // Build command
     let command = `create event: ${title} on ${date}`;
     if (time) command += ` at ${time}`;
     
+    // Close modal and send command
     closeModal('eventModal');
     addMessage(command, 'user');
     sendCommand(command);

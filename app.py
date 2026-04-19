@@ -178,29 +178,20 @@ draft_handler = DraftHandler()
 def monitor_user_emails():
     """Background thread to monitor emails for all active users"""
     global monitoring_active
-    print("📧 Email monitoring thread started")
-    print("📧 Will check for new emails every 30 seconds")
     
     while monitoring_active:
         try:
             if agent_orchestrator and active_users:
                 for user_email, user_data in list(active_users.items()):
                     try:
-                        print(f"📧 Checking emails for {user_email}...")
-                        # Pass credentials to help with refresh if needed
                         agent_orchestrator.check_email_triggers(
                             user_email, 
                             user_data.get('credentials')
                         )
                     except Exception as e:
-                        print(f"❌ Error checking emails for {user_email}: {e}")
-            else:
-                if not agent_orchestrator:
-                    print("📧 Agent orchestrator not ready yet")
-                if not active_users:
-                    print("📧 No active users logged in")
+                        print(f"❌ Email check error for {user_email}: {e}")
                     
-            time.sleep(30)  # Check every 30 seconds
+            time.sleep(30)
         except Exception as e:
             print(f"❌ Email monitoring error: {e}")
             time.sleep(60)
@@ -444,10 +435,8 @@ def oauth2callback():
         missing_scopes = [s for s in expected_scopes if s not in granted_scopes]
         
         if missing_scopes:
-            print(f"⚠️ Warning: Some scopes were not granted: {missing_scopes}")
+            print(f"⚠️ Missing scopes: {len(missing_scopes)} scope(s)")
             session['missing_scopes'] = missing_scopes
-        else:
-            print("✅ All required scopes granted!")
         
         global google_services, calendar_handler, meet_handler, file_handler, agent_orchestrator, analytics_handler, scheduler
         google_services = init_google_services()
@@ -458,8 +447,18 @@ def oauth2callback():
             file_handler = FileHandler(google_services)
             
             if agent_model is not None:
-                agent_orchestrator = AgentOrchestrator(mongo.db, google_services)
-                print("✅ Agent orchestrator initialized with Google services")
+                agent_orchestrator = AgentOrchestrator(
+                    mongo.db, 
+                    google_services,
+                    task_handler=task_handler,
+                    note_handler=note_handler,
+                    calendar_handler=calendar_handler,
+                    meet_handler=meet_handler,
+                    file_handler=file_handler,
+                    draft_handler=draft_handler,
+                    cohere_client=co
+                )
+                print("✅ Agent orchestrator initialized with all handlers")
             
             if history_model is not None and friend_model is not None and task_handler is not None:
                 analytics_handler = AnalyticsHandler(history_model, friend_model, task_handler, note_handler)
@@ -771,12 +770,6 @@ def get_agents():
     try:
         user_id = session['user']['email']
         agents = agent_model.get_user_agents(user_id)
-        
-        # Debug log
-        print(f"🔍 Sending {len(agents)} agents to frontend")
-        if agents:
-            print(f"   First agent ID: {agents[0].get('_id')} (type: {type(agents[0].get('_id'))})")
-        
         return jsonify({'success': True, 'data': agents})
     except Exception as e:
         print(f"❌ Error in get_agents: {e}")
@@ -1048,8 +1041,6 @@ def handle_command():
         # Resolve friend names in the command
         if friend_model is not None:
             resolved_command = resolve_friend_names(command, user_id, friend_model)
-            if resolved_command != command:
-                print(f"📇 Resolved friend names: '{command}' -> '{resolved_command}'")
         else:
             resolved_command = command
         
@@ -1078,9 +1069,11 @@ def handle_command():
         
         elif action in ['list_events', 'create_event', 'get_event', 'delete_event', 'list_today', 'list_date']:
             if calendar_handler:
+                print(f"📅 {action}: {parsed}")
                 response_data = calendar_handler.handle(action, parsed, command)
             else:
-                response_data = {'success': False, 'message': 'Calendar service not available'}
+                print(f"⚠️ Calendar handler not available for action: {action}")
+                response_data = {'success': False, 'message': 'Calendar service not available. Please login again.'}
         
         elif action in ['schedule_meet', 'send_meet_invite']:
             if meet_handler:
